@@ -1,17 +1,48 @@
+'use strict';
+
 var express = require("express");
 var path = require("path");
 var bodyParser = require("body-parser");
 var mongodb = require("mongodb");
 var crypto = require('crypto');
+var getmac = require('getmac');
 var ObjectID = mongodb.ObjectID;
 
 var CONTACTS_COLLECTION = "contacts";
 
-var ALGORITHM, KEY, HMAC_ALGORITHM, HMAC_KEY;
+var ALGORITHM, HMAC_ALGORITHM;
 ALGORITHM = 'AES-256-CTR';
 HMAC_ALGORITHM = 'SHA512';
-KEY = crypto.randomBytes(32); // This key should be stored in an environment variable
-HMAC_KEY = crypto.randomBytes(32); // This key should be stored in an environment variable
+
+var getMac = () => new Promise( ( resolve, reject ) =>
+  getmac.getMac( ( err, address ) =>
+    err ? reject( err ) : resolve( address.split( ':' ).join( '' ) )
+  ));
+
+var getDigest = ( data ) => crypto.createHash( 'sha512' ).update(
+    data
+  ).digest( 'hex' ).toUpperCase();
+
+var generateKeys = () => ({
+  KEY      : crypto.randomBytes( 32 ).toString( 'hex' ),
+  HMAC_KEY : crypto.randomBytes( 32 ).toString( 'hex' )
+});
+
+var transformKeys = ( keys ) => getMac().then( address => ({
+  KEY      : new Buffer( address + keys.KEY.slice( 12 ), 'hex' ),
+  HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).slice( -64 ), 'hex' )
+}));
+
+var getKeys = () => {
+  let
+    name = 'cryptokeys',
+    keys;
+
+  return new Promise( ( resolve, reject ) => {
+    keys = generateKeys();
+    resolve( transformKeys( keys ) );
+  });
+};
 
 var encrypt = function (plain_text) {
 
@@ -20,14 +51,14 @@ var encrypt = function (plain_text) {
     var hmac;
     var encryptor;
 
-    encryptor = crypto.createCipheriv(ALGORITHM, KEY, IV);
+    encryptor = crypto.createCipheriv(ALGORITHM, cryptokeys.KEY, IV);
     encryptor.setEncoding('hex');
     encryptor.write(plain_text);
     encryptor.end();
 
     cipher_text = encryptor.read();
 
-    hmac = crypto.createHmac(HMAC_ALGORITHM, HMAC_KEY);
+    hmac = crypto.createHmac(HMAC_ALGORITHM, cryptokeys.HMAC_KEY);
     hmac.update(cipher_text);
     hmac.update(IV.toString('hex')); // ensure that both the IV and the cipher-text is protected by the HMAC
 
@@ -42,7 +73,7 @@ var decrypt = function (cipher_text) {
     var hmac = cipher_blob[2];
     var decryptor, chmac, decryptedText;
 
-    chmac = crypto.createHmac(HMAC_ALGORITHM, HMAC_KEY);
+    chmac = crypto.createHmac(HMAC_ALGORITHM, cryptokeys.HMAC_KEY);
     chmac.update(ct);
     chmac.update(IV.toString('hex'));
 
@@ -51,7 +82,7 @@ var decrypt = function (cipher_text) {
         return null;
     }
 
-    decryptor = crypto.createDecipheriv(ALGORITHM, KEY, IV);
+    decryptor = crypto.createDecipheriv(ALGORITHM, cryptokeys.KEY, IV);
     decryptedText = decryptor.update(ct, 'hex', 'utf-8');
     return decryptedText + decryptor.final('utf-8');
 };
@@ -177,7 +208,12 @@ app.delete("/contacts/:id", function(req, res) {
   });
 });
 
-var blob = encrypt("FOO");
-console.log(blob);
-var unblob = decrypt(blob);
-console.log(unblob);
+let cryptokeys;
+getKeys().then( k => {
+  cryptokeys = k;
+
+  var blob = encrypt("FOO");
+  console.log(blob);
+  var unblob = decrypt(blob);
+  console.log(unblob);
+});
