@@ -50,7 +50,6 @@ var getKeys = () => new Promise( ( resolve, reject ) => {
 });
 
 var encrypt = function (plain_text) {
-
     var IV = new Buffer(crypto.randomBytes(16)); // ensure that the IV (initialization vector) is random
     var cipher_text;
     var hmac;
@@ -116,7 +115,7 @@ app.use(bodyParser.json());
 // Create a database variable outside of the database connection callback to reuse the connection pool in your app.
 var db, cryptokeys;
 
-var user = 'test@gmail.com';
+var user = undefined;//'test@gmail.com';
 
 // Connect to the database before starting the application server.
 mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
