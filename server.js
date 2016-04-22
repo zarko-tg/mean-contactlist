@@ -23,7 +23,7 @@ var getMac = () => new Promise( ( resolve, reject ) =>
   ));
 
 var getDigest = ( data ) => crypto.createHash( 'sha512' ).update(
-    data
+    data, 'utf8'
   ).digest( 'hex' ).toUpperCase();
 
 var generateKeys = () => ({
@@ -88,8 +88,8 @@ var decrypt = function (cipher_text) {
     }
 
     decryptor = crypto.createDecipheriv(ALGORITHM, cryptokeys.KEY, IV);
-    decryptedText = decryptor.update(ct, 'hex', 'utf-8');
-    return decryptedText + decryptor.final('utf-8');
+    decryptedText = decryptor.update(ct, 'hex', 'utf8');
+    return decryptedText + decryptor.final('utf8');
 };
 
 var constant_time_compare = function (val1, val2) {
@@ -116,7 +116,7 @@ app.use(bodyParser.json());
 // Create a database variable outside of the database connection callback to reuse the connection pool in your app.
 var db, cryptokeys;
 
-var user = 'test@gmail.com';
+var user = undefined;//'test@gmail.com';
 
 // Connect to the database before starting the application server.
 mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
