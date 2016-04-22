@@ -8,7 +8,10 @@ var crypto = require('crypto');
 var getmac = require('getmac');
 var ObjectID = mongodb.ObjectID;
 
-var CONTACTS_COLLECTION = "contacts";
+var
+  CONTACTS_COLLECTION = "contacts",
+  KEYS_COLLECTION = "cryptokeys",
+  ACCOUNTS_COLLECTION = "accounts";
 
 var ALGORITHM, HMAC_ALGORITHM;
 ALGORITHM = 'AES-256-CTR';
@@ -33,16 +36,18 @@ var transformKeys = ( keys ) => getMac().then( address => ({
   HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).slice( -64 ), 'hex' )
 }));
 
-var getKeys = () => {
-  let
-    name = 'cryptokeys',
-    keys;
-
-  return new Promise( ( resolve, reject ) => {
-    keys = generateKeys();
-    resolve( transformKeys( keys ) );
+var getKeys = () => new Promise( ( resolve, reject ) => {
+  db.collection(KEYS_COLLECTION).find().toArray( ( err, existing ) => {
+    if ( err ) return reject( err );
+    if ( existing.length > 0 ) {
+      return resolve( transformKeys( existing[ 0 ] ) );
+    }
+    db.collection(KEYS_COLLECTION).insertOne( generateKeys(), (err, created) => {
+      if ( err ) return reject( err );
+      resolve( transformKeys( created ) );
+    });
   });
-};
+});
 
 var encrypt = function (plain_text) {
 
@@ -109,7 +114,9 @@ app.use(express.static(__dirname + "/public"));
 app.use(bodyParser.json());
 
 // Create a database variable outside of the database connection callback to reuse the connection pool in your app.
-var db;
+var db, cryptokeys;
+
+var user = undefined;//'test@gmail.com';
 
 // Connect to the database before starting the application server.
 mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
@@ -122,10 +129,32 @@ mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
   db = database;
   console.log("Database connection ready");
 
-  // Initialize the app.
-  var server = app.listen(process.env.PORT || 8080, function () {
-    var port = server.address().port;
-    console.log("App now running on port", port);
+  getKeys().then( k => {
+    cryptokeys = k;
+
+    // Initialize the app.
+    var server = app.listen(process.env.PORT || 8080, function () {
+      var port = server.address().port;
+      console.log("App now running on port", port);
+    });
+
+    if ( ! user ) {
+      db.collection(ACCOUNTS_COLLECTION).insertOne({
+        user   : getDigest( 'test@gmail.com' ),
+        secret : encrypt( 'FOO' )
+      }, (err) => {
+        if ( err ) console.log( err );
+      });
+    }
+    else {
+      db.collection(ACCOUNTS_COLLECTION).findOne({ user : getDigest( user ) }, function(err, doc) {
+        if (err) {
+          console.log( err );
+        } else {
+          console.log( decrypt(doc.secret) );
+        }
+      });
+    }
   });
 });
 
@@ -206,14 +235,4 @@ app.delete("/contacts/:id", function(req, res) {
       res.status(204).end();
     }
   });
-});
-
-let cryptokeys;
-getKeys().then( k => {
-  cryptokeys = k;
-
-  var blob = encrypt("FOO");
-  console.log(blob);
-  var unblob = decrypt(blob);
-  console.log(unblob);
 });
