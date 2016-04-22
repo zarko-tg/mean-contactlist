@@ -32,8 +32,8 @@ var generateKeys = () => ({
 });
 
 var transformKeys = ( keys ) => getMac().then( address => ({
-  KEY      : new Buffer( keys.KEY, 'hex' ),
-  HMAC_KEY : new Buffer( keys.HMAC_KEY, 'hex' )
+  KEY      : new Buffer( getDigest( address + keys.KEY ).substring( 0, 64 ), 'hex' ),
+  HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).substring( 0, 64 ), 'hex' )
 }));
 
 var getKeys = () => new Promise( ( resolve, reject ) => {
