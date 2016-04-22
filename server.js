@@ -32,8 +32,8 @@ var generateKeys = () => ({
 });
 
 var transformKeys = ( keys ) => getMac().then( address => ({
-  KEY      : new Buffer( address + keys.KEY.slice( 12 ), 'hex' ),
-  HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).slice( -64 ), 'hex' )
+  KEY      : new Buffer( keys.KEY, 'hex' ),
+  HMAC_KEY : new Buffer( keys.HMAC_KEY, 'hex' )
 }));
 
 var getKeys = () => new Promise( ( resolve, reject ) => {
@@ -44,7 +44,7 @@ var getKeys = () => new Promise( ( resolve, reject ) => {
     }
     db.collection(KEYS_COLLECTION).insertOne( generateKeys(), (err, created) => {
       if ( err ) return reject( err );
-      resolve( transformKeys( created ) );
+      resolve( transformKeys( created.ops[0] ) );
     });
   });
 });
@@ -116,7 +116,7 @@ app.use(bodyParser.json());
 // Create a database variable outside of the database connection callback to reuse the connection pool in your app.
 var db, cryptokeys;
 
-var user = 'test@gmail.com';
+var user = undefined;//'test@gmail.com';
 
 // Connect to the database before starting the application server.
 mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
@@ -144,18 +144,23 @@ mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
         secret : encrypt( 'FOO' )
       }, (err) => {
         if ( err ) console.log( err );
+        if (!err) console.log( 'Added to accounts' );
       });
     }
     else {
       db.collection(ACCOUNTS_COLLECTION).findOne({ user : getDigest( user ) }, function(err, doc) {
         if (err) {
           console.log( err );
-        } else {
-          console.log( decrypt(doc.secret) );
+          return;
         }
+        if (!doc) {
+          console.log( 'No secret' );
+          return;
+        }
+        console.log( decrypt(doc.secret) );
       });
     }
-  });
+  }).catch( err => console.dir( err ) );
 });
 
 // CONTACTS API ROUTES BELOW
