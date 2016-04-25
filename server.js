@@ -1,11 +1,11 @@
 'use strict';
 
 var express = require("express");
+var exec = require("child_process").execSync;
 var path = require("path");
 var bodyParser = require("body-parser");
 var mongodb = require("mongodb");
 var crypto = require('crypto');
-var getmac = require('getmac');
 var ObjectID = mongodb.ObjectID;
 
 var
@@ -17,13 +17,14 @@ var ALGORITHM, HMAC_ALGORITHM;
 ALGORITHM = 'AES-256-CTR';
 HMAC_ALGORITHM = 'SHA512';
 
-var getMac = () => new Promise( ( resolve, reject ) =>
-  getmac.getMac( ( err, address ) =>
-    err ? reject( err ) : resolve( address.split( ':' ).join( '' ) )
-  ));
+var getId = () => {
+  let id = exec( 'cat /var/lib/dbus/machine-id' ).toString().trim();
+  console.log( '>' + id + '<' );
+  return id;
+};
 
 var getDigest = ( data ) => crypto.createHash( 'sha512' ).update(
-    data, 'utf8'
+    data
   ).digest( 'hex' ).toUpperCase();
 
 var generateKeys = () => ({
@@ -31,19 +32,9 @@ var generateKeys = () => ({
   HMAC_KEY : crypto.randomBytes( 32 ).toString( 'hex' )
 });
 
-var transformKeys = ( keys ) => getMac().then( address => {
-  console.log( 'ADDRESS : ' + address );
-  console.log( 'KEY     : ' + keys.KEY );
-  let transformed = {
-    KEY      : new Buffer( getDigest( address + keys.KEY ).substring( 0, 64 ), 'hex' ),
-    HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).substring( 0, 64 ), 'hex' )
-    /*
-    KEY      : new Buffer( keys.KEY, 'hex' ),
-    HMAC_KEY : new Buffer( keys.HMAC_KEY, 'hex' )
-    */
-  };
-  console.dir( transformed );
-  return transformed;
+var transformKeys = ( keys ) => ({
+  KEY      : new Buffer( getDigest( getId() + keys.KEY ).substring( 0, 64 ), 'hex' ),
+  HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).substring( 0, 64 ), 'hex' )
 });
 
 var getKeys = () => new Promise( ( resolve, reject ) => {
@@ -125,7 +116,7 @@ app.use(bodyParser.json());
 // Create a database variable outside of the database connection callback to reuse the connection pool in your app.
 var db, cryptokeys;
 
-var user = 'test@gmail.com';
+var user = undefined;//'test@gmail.com';
 
 // Connect to the database before starting the application server.
 mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
