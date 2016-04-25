@@ -136,7 +136,7 @@ mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
 
   // Save database object from the callback for reuse.
   db = database;
-  console.log("Database connection ready");
+  console.log("Database connection ready now");
 
   getKeys().then( k => {
     cryptokeys = k;
