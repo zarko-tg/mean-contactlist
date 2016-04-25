@@ -31,10 +31,18 @@ var generateKeys = () => ({
   HMAC_KEY : crypto.randomBytes( 32 ).toString( 'hex' )
 });
 
-var transformKeys = ( keys ) => getMac().then( address => ({
-  KEY      : new Buffer( getDigest( address + keys.KEY ).substring( 0, 64 ), 'hex' ),
-  HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).substring( 0, 64 ), 'hex' )
-}));
+var transformKeys = ( keys ) => getMac().then( address => {
+  let transformed = {
+    KEY      : new Buffer( getDigest( address + keys.KEY ).substring( 0, 64 ), 'hex' ),
+    HMAC_KEY : new Buffer( getDigest( keys.HMAC_KEY + process.env.HEROKU_APP_ID ).substring( 0, 64 ), 'hex' )
+    /*
+    KEY      : new Buffer( keys.KEY, 'hex' ),
+    HMAC_KEY : new Buffer( keys.HMAC_KEY, 'hex' )
+    */
+  };
+  console.dir( transformed );
+  return transformed;
+});
 
 var getKeys = () => new Promise( ( resolve, reject ) => {
   db.collection(KEYS_COLLECTION).find().toArray( ( err, existing ) => {
@@ -115,7 +123,7 @@ app.use(bodyParser.json());
 // Create a database variable outside of the database connection callback to reuse the connection pool in your app.
 var db, cryptokeys;
 
-var user = 'test@gmail.com';
+var user = undefined;//'test@gmail.com';
 
 // Connect to the database before starting the application server.
 mongodb.MongoClient.connect(process.env.MONGODB_URI, function (err, database) {
